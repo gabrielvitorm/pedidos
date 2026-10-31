@@ -5,6 +5,16 @@ spring:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:pedidos}
     username: ${POSTGRES_USER:pedidos}
     password: ${POSTGRES_PASSWORD:pedidos}
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:aula}
+    # Credencial didática, apenas para ambiente local
+    password: ${RABBITMQ_PASSWORD:aula-local}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
   jpa:
     open-in-view: false
     hibernate:

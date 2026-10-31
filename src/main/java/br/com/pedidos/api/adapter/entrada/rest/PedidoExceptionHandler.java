@@ -2,8 +2,11 @@ package br.com.pedidos.api.adapter.entrada.rest;
 
 import br.com.pedidos.api.application.exception.ItemInvalidoException;
 import br.com.pedidos.api.application.exception.PedidoSemItensException;
+import br.com.pedidos.api.application.exception.PedidoEstadoIncompativelException;
 import br.com.pedidos.api.application.exception.PedidoFechadoException;
 import br.com.pedidos.api.application.exception.PedidoNaoEncontradoException;
+import br.com.pedidos.api.application.exception.PublicacaoPagamentoException;
+import br.com.pedidos.api.application.exception.SolicitacaoConflitanteException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -27,10 +30,17 @@ public class PedidoExceptionHandler {
                 .body(new ErroResponse(exception.getMessage()));
     }
 
-    @ExceptionHandler(PedidoFechadoException.class)
-    public ResponseEntity<ErroResponse> tratarPedidoFechado(PedidoFechadoException exception) {
+    @ExceptionHandler({PedidoFechadoException.class, PedidoEstadoIncompativelException.class,
+            SolicitacaoConflitanteException.class})
+    public ResponseEntity<ErroResponse> tratarConflito(RuntimeException exception) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ErroResponse(exception.getMessage()));
+    }
+
+    @ExceptionHandler(PublicacaoPagamentoException.class)
+    public ResponseEntity<ErroResponse> tratarPublicacaoIndisponivel(PublicacaoPagamentoException exception) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ErroResponse("Pagamento nao pode ser solicitado agora; repita com a mesma solicitacaoId"));
     }
 
     @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentNotValidException.class,
