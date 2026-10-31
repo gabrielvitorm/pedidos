@@ -1,0 +1,331 @@
+{
+  "info": {
+    "name": "Pedidos - pagamento assíncrono",
+    "description": "Collection da API de Pedidos segundo o contrato da spec 05 (.specs/05-pagamentos-assincronos.md).\n\nUse junto com o environment `Pedidos - local` (postman/local.postman_environment.json). Execute na ordem: criar → consultar → solicitar → consultar novamente.\n\nCopie manualmente o `id` da resposta do request 01 para a variável `pedido_id` e o `id` da resposta do request 05 para `pedido_recusa_id`.\n\nAs chaves `solicitacao_aprovar_id` e `solicitacao_recusar_id` são fixas no environment: reenviar um request reutiliza a mesma chave, que é o que prova a idempotência. Para repetir o roteiro inteiro com pedidos novos no mesmo banco, troque essas duas chaves uma vez antes de começar; caso contrário, a chave já usada em outro pedido responde 409.\n\nNesta etapa do laboratório não existe consumidor de Pagamentos: depois de solicitar, o pedido fica EM_PAGAMENTO e a mensagem fica na fila pagamentos.solicitacoes. 202 nunca significa aprovado.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 Criar pedido (aprovação)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"clienteId\": \"c-1\",\n  \"itens\": [\n    {\n      \"sku\": \"CAFE-500\",\n      \"quantidade\": 2,\n      \"precoUnitario\": 18.90\n    }\n  ]\n}"
+        },
+        "url": "{{base_url}}/pedidos",
+        "description": "Cria o pedido de 2 cafés a 18.90.\n\nEsperado: 201 Created com status ABERTO e total 37.80.\n\nDepois de enviar: copie o campo `id` da resposta e cole no valor da variável `pedido_id` do environment. Salve o environment."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "pm.test('ABERTO com total 37.80', () => {",
+              "  const pedido = pm.response.json();",
+              "  pm.expect(pedido.status).to.eql('ABERTO');",
+              "  pm.expect(pedido.total).to.eql(37.8);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Consultar pedido",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/pedidos/{{pedido_id}}",
+        "description": "Usa `pedido_id` copiado do request 01.\n\nEsperado: 200 OK com status ABERTO, o item CAFE-500 e total 37.80."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('ABERTO', () => pm.expect(pm.response.json().status).to.eql('ABERTO'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Solicitar pagamento - APROVAR",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"solicitacaoId\": \"{{solicitacao_aprovar_id}}\",\n  \"cenario\": \"APROVAR\"\n}"
+        },
+        "url": "{{base_url}}/pedidos/{{pedido_id}}/pagamentos",
+        "description": "Solicita o pagamento simulado com cenário APROVAR. O valor não é enviado: vem do total do pedido.\n\nEsperado: 202 Accepted com solicitacaoId, pedidoId e status EM_PAGAMENTO. 202 significa solicitação registrada e confirmada pelo broker, nunca pagamento aprovado.\n\nA mensagem fica visível na fila pagamentos.solicitacoes (painel http://127.0.0.1:15672)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('202 Accepted', () => pm.response.to.have.status(202));",
+              "pm.test('EM_PAGAMENTO com a chave enviada', () => {",
+              "  const resposta = pm.response.json();",
+              "  pm.expect(resposta.status).to.eql('EM_PAGAMENTO');",
+              "  pm.expect(resposta.solicitacaoId).to.eql(pm.environment.get('solicitacao_aprovar_id'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Consultar pedido novamente",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/pedidos/{{pedido_id}}",
+        "description": "Esperado nesta etapa: 200 OK com status EM_PAGAMENTO.\n\nQuando o consumidor de Pagamentos existir (próxima etapa), a aprovação levará o pedido a PAGO."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('EM_PAGAMENTO', () => pm.expect(pm.response.json().status).to.eql('EM_PAGAMENTO'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Criar pedido (recusa)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"clienteId\": \"c-1\",\n  \"itens\": [\n    {\n      \"sku\": \"CAFE-500\",\n      \"quantidade\": 2,\n      \"precoUnitario\": 18.90\n    }\n  ]\n}"
+        },
+        "url": "{{base_url}}/pedidos",
+        "description": "Cria um segundo pedido para o cenário de recusa.\n\nEsperado: 201 Created com status ABERTO e total 37.80.\n\nDepois de enviar: copie o campo `id` da resposta e cole no valor da variável `pedido_recusa_id` do environment. Salve o environment."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "pm.test('ABERTO', () => pm.expect(pm.response.json().status).to.eql('ABERTO'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Consultar pedido (recusa)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/pedidos/{{pedido_recusa_id}}",
+        "description": "Usa `pedido_recusa_id` copiado do request 05.\n\nEsperado: 200 OK com status ABERTO."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('ABERTO', () => pm.expect(pm.response.json().status).to.eql('ABERTO'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Solicitar pagamento - RECUSAR",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"solicitacaoId\": \"{{solicitacao_recusar_id}}\",\n  \"cenario\": \"RECUSAR\"\n}"
+        },
+        "url": "{{base_url}}/pedidos/{{pedido_recusa_id}}/pagamentos",
+        "description": "Solicita o pagamento simulado com cenário RECUSAR.\n\nEsperado: 202 Accepted com status EM_PAGAMENTO. A recusa só é aplicada quando o consumidor de Pagamentos existir."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('202 Accepted', () => pm.response.to.have.status(202));",
+              "pm.test('EM_PAGAMENTO', () => pm.expect(pm.response.json().status).to.eql('EM_PAGAMENTO'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Consultar pedido (recusa) novamente",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/pedidos/{{pedido_recusa_id}}",
+        "description": "Esperado nesta etapa: 200 OK com status EM_PAGAMENTO.\n\nQuando o consumidor de Pagamentos existir (próxima etapa), a recusa devolverá o pedido a ABERTO com os mesmos itens."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('EM_PAGAMENTO', () => pm.expect(pm.response.json().status).to.eql('EM_PAGAMENTO'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Repetição - mesma chave e conteúdo",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"solicitacaoId\": \"{{solicitacao_aprovar_id}}\",\n  \"cenario\": \"APROVAR\"\n}"
+        },
+        "url": "{{base_url}}/pedidos/{{pedido_id}}/pagamentos",
+        "description": "Reenvia exatamente o request 03, com a mesma chave e o mesmo conteúdo.\n\nEsperado: 202 Accepted com a mesma solicitacaoId e status EM_PAGAMENTO. Nenhuma solicitação nova é criada e nenhuma mensagem nova é publicada (a fila continua com uma mensagem para essa chave).\n\nSe a primeira tentativa tivesse recebido 503, esta repetição republicaria a solicitação pendente."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('202 Accepted', () => pm.response.to.have.status(202));",
+              "pm.test('Mesma chave', () => pm.expect(pm.response.json().solicitacaoId).to.eql(pm.environment.get('solicitacao_aprovar_id')));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 Conflito - mesma chave, outro cenário",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"solicitacaoId\": \"{{solicitacao_aprovar_id}}\",\n  \"cenario\": \"RECUSAR\"\n}"
+        },
+        "url": "{{base_url}}/pedidos/{{pedido_id}}/pagamentos",
+        "description": "Reutiliza a chave do request 03 com outro cenário.\n\nEsperado: 409 Conflict com {\"mensagem\": \"Solicitacao <chave> ja foi usada com outro conteudo\"}. O pedido não muda e nada é publicado."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+              "pm.test('Com mensagem', () => pm.expect(pm.response.json().mensagem).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 Pedido ausente - solicitar pagamento",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"solicitacaoId\": \"{{solicitacao_pedido_ausente_id}}\",\n  \"cenario\": \"APROVAR\"\n}"
+        },
+        "url": "{{base_url}}/pedidos/{{pedido_inexistente_id}}/pagamentos",
+        "description": "Solicita pagamento para um pedido que não existe.\n\nEsperado: 404 Not Found com {\"mensagem\": \"Pedido não encontrado: 00000000-0000-0000-0000-000000000000\"}. Nada é gravado nem publicado.\n\nUsa a chave própria `solicitacao_pedido_ausente_id`: a API verifica a chave antes do pedido, então reutilizar a chave do request 03 responderia 409, e não 404. Como nada é gravado com essa chave, o 404 se repete em qualquer reenvio."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 Pedido ausente - consultar",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/pedidos/{{pedido_inexistente_id}}",
+        "description": "Esperado: 404 Not Found com {\"mensagem\": \"Pedido não encontrado: 00000000-0000-0000-0000-000000000000\"}."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+              "pm.test('Com mensagem', () => pm.expect(pm.response.json().mensagem).to.include('Pedido não encontrado'));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
