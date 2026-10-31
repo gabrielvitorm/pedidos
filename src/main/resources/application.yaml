@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: api
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:pedidos}
+    username: ${POSTGRES_USER:pedidos}
+    password: ${POSTGRES_PASSWORD:pedidos}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
