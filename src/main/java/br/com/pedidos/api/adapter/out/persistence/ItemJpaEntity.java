@@ -24,6 +24,9 @@ public class ItemJpaEntity {
     @JoinColumn(name = "pedido_id", nullable = false)
     private PedidoJpaEntity pedido;
 
+    @Column(name = "sku", nullable = false)
+    private String sku;
+
     @Column(name = "quantidade", nullable = false)
     private int quantidade;
 
@@ -33,19 +36,20 @@ public class ItemJpaEntity {
     protected ItemJpaEntity() {
     }
 
-    ItemJpaEntity(UUID pedidoId, String sku, int quantidade, BigDecimal precoUnitario) {
-        this.id = new ItemJpaId(pedidoId, sku);
+    ItemJpaEntity(UUID pedidoId, int posicao, String sku, int quantidade, BigDecimal precoUnitario) {
+        this.id = new ItemJpaId(pedidoId, posicao);
+        this.sku = sku;
         this.quantidade = quantidade;
         this.precoUnitario = precoUnitario;
     }
 
     void vincularPedido(PedidoJpaEntity pedido) {
         this.pedido = pedido;
-        this.id = new ItemJpaId(pedido.id(), sku());
+        this.id = new ItemJpaId(pedido.id(), id.posicao());
     }
 
     String sku() {
-        return id.sku();
+        return sku;
     }
 
     int quantidade() {

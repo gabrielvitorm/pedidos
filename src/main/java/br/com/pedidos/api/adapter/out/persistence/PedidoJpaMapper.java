@@ -9,8 +9,12 @@ public class PedidoJpaMapper {
 
     PedidoJpaEntity toEntity(Pedido pedido) {
         var entity = new PedidoJpaEntity(pedido.id(), pedido.cliente(), pedido.status());
-        pedido.itens().forEach(item -> entity.adicionarItem(
-                new ItemJpaEntity(pedido.id(), item.produto(), item.quantidade(), item.precoUnitario())));
+        var itens = pedido.itens();
+        for (int posicao = 0; posicao < itens.size(); posicao++) {
+            var item = itens.get(posicao);
+            entity.adicionarItem(new ItemJpaEntity(
+                    pedido.id(), posicao, item.produto(), item.quantidade(), item.precoUnitario()));
+        }
         return entity;
     }
 

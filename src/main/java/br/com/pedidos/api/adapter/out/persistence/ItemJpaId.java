@@ -12,23 +12,23 @@ public class ItemJpaId implements Serializable {
     @Column(name = "pedido_id", nullable = false)
     private UUID pedidoId;
 
-    @Column(name = "sku", nullable = false)
-    private String sku;
+    @Column(name = "posicao", nullable = false)
+    private int posicao;
 
     protected ItemJpaId() {
     }
 
-    ItemJpaId(UUID pedidoId, String sku) {
+    ItemJpaId(UUID pedidoId, int posicao) {
         this.pedidoId = pedidoId;
-        this.sku = sku;
+        this.posicao = posicao;
     }
 
     UUID pedidoId() {
         return pedidoId;
     }
 
-    String sku() {
-        return sku;
+    int posicao() {
+        return posicao;
     }
 
     @Override
@@ -39,11 +39,11 @@ public class ItemJpaId implements Serializable {
         if (!(object instanceof ItemJpaId other)) {
             return false;
         }
-        return pedidoId.equals(other.pedidoId) && sku.equals(other.sku);
+        return pedidoId.equals(other.pedidoId) && posicao == other.posicao;
     }
 
     @Override
     public int hashCode() {
-        return java.util.Objects.hash(pedidoId, sku);
+        return java.util.Objects.hash(pedidoId, posicao);
     }
 }

@@ -41,4 +41,21 @@ class PedidosJpaAdapterIT {
         assertThat(recuperado.total()).isEqualByComparingTo("37.80");
         assertThat(colunasTotal).isZero();
     }
+
+    @Test
+    void persisteMesmoSkuEmLinhasSeparadasPreservandoOrdem() {
+        var pedido = Pedido.novo("c-1")
+                .adicionarItem(new ItemPedido("CAFE-500", 2, new BigDecimal("18.90")))
+                .adicionarItem(new ItemPedido("PAO-001", 3, new BigDecimal("2.50")))
+                .adicionarItem(new ItemPedido("CAFE-500", 1, new BigDecimal("18.90")));
+
+        adapter.salvar(pedido);
+        var recuperado = adapter.buscarPorId(pedido.id()).orElseThrow();
+        var linhas = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM item_pedido WHERE pedido_id = ?", Integer.class, pedido.id());
+
+        assertThat(recuperado.itens()).containsExactlyElementsOf(pedido.itens());
+        assertThat(recuperado.total()).isEqualByComparingTo("64.20");
+        assertThat(linhas).isEqualTo(3);
+    }
 }

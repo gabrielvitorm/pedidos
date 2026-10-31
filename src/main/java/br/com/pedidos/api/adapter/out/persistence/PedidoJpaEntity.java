@@ -8,6 +8,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 
 import java.util.ArrayList;
@@ -30,6 +31,7 @@ public class PedidoJpaEntity {
     private StatusPedido status;
 
     @OneToMany(mappedBy = "pedido", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("id.posicao")
     private List<ItemJpaEntity> itens = new ArrayList<>();
 
     protected PedidoJpaEntity() {
