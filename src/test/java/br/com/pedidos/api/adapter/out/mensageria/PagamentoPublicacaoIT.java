@@ -9,13 +9,22 @@ import br.com.pedidos.api.domain.model.ItemPedido;
 import br.com.pedidos.api.domain.model.Pedido;
 import br.com.pedidos.api.domain.model.SolicitacaoPagamento;
 import br.com.pedidos.api.domain.model.StatusPedido;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.amqp.core.AmqpAdmin;
+import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.DirectExchange;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageDeliveryMode;
+import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -42,7 +51,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Executa contra o PostgreSQL e o RabbitMQ locais do Compose.
- * O painel de gerenciamento é usado apenas para inspecionar filas, sem consumir mensagens.
+ * Como o simulador consome pagamentos.solicitacoes, cada teste lê as mensagens publicadas por uma
+ * fila espiã temporária ligada ao mesmo exchange e chave, que recebe uma cópia de cada mensagem.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -64,10 +74,30 @@ class PagamentoPublicacaoIT {
     private RabbitTemplate rabbitTemplate;
 
     @Autowired
+    private AmqpAdmin amqpAdmin;
+
+    @Autowired
     private JsonMapper jsonMapper;
 
     // O painel encerra a conexão quando o cliente tenta upgrade para HTTP/2 em requisições com corpo
     private final HttpClient http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
+
+    private String filaEspia;
+
+    @BeforeEach
+    void criarFilaEspia() {
+        // Não usa auto-delete: o receive do RabbitTemplate cancela o consumidor e apagaria a fila
+        var fila = QueueBuilder.nonDurable("teste.espia." + UUID.randomUUID()).expires(60_000).build();
+        amqpAdmin.declareQueue(fila);
+        amqpAdmin.declareBinding(BindingBuilder.bind(fila).to(new DirectExchange(EXCHANGE_COMANDOS))
+                .with(CHAVE_SOLICITAR));
+        filaEspia = fila.getName();
+    }
+
+    @AfterEach
+    void removerFilaEspia() {
+        amqpAdmin.deleteQueue(filaEspia);
+    }
 
     @Test
     void solicitacaoAceitaPublicaMensagemV1PersistenteEResponde202() throws Exception {
@@ -81,10 +111,10 @@ class PagamentoPublicacaoIT {
 
         var mensagens = mensagensDaSolicitacao(solicitacaoId);
         assertThat(mensagens).hasSize(1);
-        var mensagem = mensagens.getFirst();
-        assertThat(mensagem.get("properties").get("delivery_mode").asInt()).isEqualTo(2);
-        assertThat(mensagem.get("properties").get("content_type").asString()).isEqualTo("application/json");
-        var corpo = jsonMapper.readTree(mensagem.get("payload").asString());
+        var propriedades = mensagens.getFirst().getMessageProperties();
+        assertThat(propriedades.getReceivedDeliveryMode()).isEqualTo(MessageDeliveryMode.PERSISTENT);
+        assertThat(propriedades.getContentType()).isEqualTo("application/json");
+        var corpo = jsonMapper.readTree(mensagens.getFirst().getBody());
         assertThat(corpo.get("versao").asInt()).isEqualTo(1);
         assertThat(corpo.get("pedidoId").asString()).isEqualTo(pedido.id().toString());
         assertThat(corpo.get("cenario").asString()).isEqualTo("APROVAR");
@@ -92,7 +122,9 @@ class PagamentoPublicacaoIT {
         assertThat(corpo.get("valor").decimalValue()).isEqualByComparingTo("37.80");
         assertThat(solicitacoes.buscarPorId(solicitacaoId).orElseThrow().status())
                 .isEqualTo(SolicitacaoPagamento.Status.PUBLICADA);
-        assertThat(pedidos.buscarPorId(pedido.id()).orElseThrow().status()).isEqualTo(StatusPedido.EM_PAGAMENTO);
+        // O simulador pode já ter processado a solicitação
+        assertThat(pedidos.buscarPorId(pedido.id()).orElseThrow().status())
+                .isIn(StatusPedido.EM_PAGAMENTO, StatusPedido.PAGO);
     }
 
     @Test
@@ -118,10 +150,11 @@ class PagamentoPublicacaoIT {
     }
 
     @Test
-    void pedidoEmPagamentoRecusaNovaChaveCom409() throws Exception {
+    void pedidoForaDeAbertoRecusaNovaChaveCom409() throws Exception {
         var pedido = pedidos.salvar(pedidoComCafe());
         solicitarPorHttp(pedido.id(), UUID.randomUUID(), "APROVAR").andExpect(status().isAccepted());
 
+        // EM_PAGAMENTO ou já PAGO pelo simulador: ambos recusam nova solicitação
         solicitarPorHttp(pedido.id(), UUID.randomUUID(), "APROVAR").andExpect(status().isConflict());
     }
 
@@ -175,8 +208,6 @@ class PagamentoPublicacaoIT {
 
     @Test
     void topologiaDeclaradaComFilasDeErroEArgumentosDeDeadLetter() throws Exception {
-        rabbitTemplate.execute(channel -> null);
-
         for (var exchange : List.of("pagamentos.comandos", "pagamentos.eventos")) {
             var json = painel("/exchanges/%2F/" + exchange);
             assertThat(json.get("type").asString()).isEqualTo("direct");
@@ -209,8 +240,7 @@ class PagamentoPublicacaoIT {
         assertThat(chaves).containsExactly(chave);
     }
 
-    private org.springframework.test.web.servlet.ResultActions solicitarPorHttp(UUID pedidoId, UUID solicitacaoId,
-                                                                                String cenario) throws Exception {
+    private ResultActions solicitarPorHttp(UUID pedidoId, UUID solicitacaoId, String cenario) throws Exception {
         return mvc.perform(post("/pedidos/{pedidoId}/pagamentos", pedidoId)
                 .contentType(APPLICATION_JSON)
                 .content("""
@@ -219,30 +249,24 @@ class PagamentoPublicacaoIT {
     }
 
     /**
-     * Lê as mensagens da fila pelo painel e as devolve à fila (ack_requeue_true).
+     * Esvazia a fila espiã e devolve as cópias publicadas para a solicitação.
      */
-    private List<JsonNode> mensagensDaSolicitacao(UUID solicitacaoId) throws Exception {
-        var resposta = chamarPainel(HttpRequest.newBuilder(URI.create(PAINEL + "/queues/%2F/pagamentos.solicitacoes/get"))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(
-                        "{\"count\":10000,\"ackmode\":\"ack_requeue_true\",\"encoding\":\"auto\"}")));
-        var encontradas = new ArrayList<JsonNode>();
-        resposta.forEach(mensagem -> {
-            var corpo = jsonMapper.readTree(mensagem.get("payload").asString());
+    private List<Message> mensagensDaSolicitacao(UUID solicitacaoId) {
+        var encontradas = new ArrayList<Message>();
+        Message mensagem;
+        while ((mensagem = rabbitTemplate.receive(filaEspia, 1_000)) != null) {
+            var corpo = jsonMapper.readTree(mensagem.getBody());
             if (solicitacaoId.toString().equals(corpo.path("solicitacaoId").asString(""))) {
                 encontradas.add(mensagem);
             }
-        });
+        }
         return encontradas;
     }
 
     private JsonNode painel(String caminho) throws Exception {
-        return chamarPainel(HttpRequest.newBuilder(URI.create(PAINEL + caminho)).GET());
-    }
-
-    private JsonNode chamarPainel(HttpRequest.Builder requisicao) throws Exception {
         var autorizacao = Base64.getEncoder().encodeToString(CREDENCIAL_LOCAL.getBytes(StandardCharsets.UTF_8));
-        var resposta = http.send(requisicao.header("Authorization", "Basic " + autorizacao).build(),
+        var resposta = http.send(HttpRequest.newBuilder(URI.create(PAINEL + caminho))
+                        .header("Authorization", "Basic " + autorizacao).GET().build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(resposta.statusCode()).isEqualTo(200);
         return jsonMapper.readTree(resposta.body());

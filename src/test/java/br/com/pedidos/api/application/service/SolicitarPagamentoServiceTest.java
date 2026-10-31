@@ -227,6 +227,11 @@ class SolicitarPagamentoServiceTest {
             return publicada;
         }
 
+        @Override
+        public void registrarResultado(Pedido pedidoAtualizado, SolicitacaoPagamento solicitacaoResolvida) {
+            throw new UnsupportedOperationException("Solicitar pagamento nao registra resultado");
+        }
+
         private SolicitacaoPagamento porId(UUID solicitacaoId) {
             return solicitacoes.get(solicitacaoId);
         }

@@ -16,4 +16,9 @@ public interface SolicitacoesPagamento {
     void registrar(Pedido pedidoEmPagamento, SolicitacaoPagamento solicitacao);
 
     SolicitacaoPagamento marcarPublicada(UUID solicitacaoId);
+
+    /**
+     * Grava o novo status do pedido, que deve sair de EM_PAGAMENTO, e o resultado da solicitação de forma atômica.
+     */
+    void registrarResultado(Pedido pedidoAtualizado, SolicitacaoPagamento solicitacaoResolvida);
 }
