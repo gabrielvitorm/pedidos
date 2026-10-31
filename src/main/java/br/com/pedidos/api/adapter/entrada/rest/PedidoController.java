@@ -2,10 +2,12 @@ package br.com.pedidos.api.adapter.entrada.rest;
 
 import br.com.pedidos.api.application.exception.ItemInvalidoException;
 import br.com.pedidos.api.application.port.in.AdicionarItem;
+import br.com.pedidos.api.application.port.in.ConsultarPedido;
 import br.com.pedidos.api.application.port.in.CriarPedido;
 import br.com.pedidos.api.domain.model.ItemPedido;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,10 +23,17 @@ public class PedidoController {
 
     private final CriarPedido criarPedido;
     private final AdicionarItem adicionarItem;
+    private final ConsultarPedido consultarPedido;
 
-    public PedidoController(CriarPedido criarPedido, AdicionarItem adicionarItem) {
+    public PedidoController(CriarPedido criarPedido, AdicionarItem adicionarItem, ConsultarPedido consultarPedido) {
         this.criarPedido = criarPedido;
         this.adicionarItem = adicionarItem;
+        this.consultarPedido = consultarPedido;
+    }
+
+    @GetMapping("/{id}")
+    public PedidoResponse consultar(@PathVariable UUID id) {
+        return PedidoResponse.from(consultarPedido.consultar(id));
     }
 
     @PostMapping

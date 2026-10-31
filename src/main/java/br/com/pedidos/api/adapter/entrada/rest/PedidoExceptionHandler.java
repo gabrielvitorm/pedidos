@@ -10,6 +10,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
 public class PedidoExceptionHandler {
@@ -32,7 +33,8 @@ public class PedidoExceptionHandler {
                 .body(new ErroResponse(exception.getMessage()));
     }
 
-    @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentNotValidException.class})
+    @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentNotValidException.class,
+            MethodArgumentTypeMismatchException.class})
     public ResponseEntity<ErroResponse> tratarRequisicaoInvalida(Exception exception) {
         return ResponseEntity.badRequest()
                 .body(new ErroResponse("Requisição inválida"));

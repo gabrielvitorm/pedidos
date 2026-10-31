@@ -1,5 +1,6 @@
 package br.com.pedidos.api.adapter.entrada.rest;
 
+import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -8,7 +9,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import java.util.UUID;
+
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -91,6 +95,45 @@ class PedidoControllerIT {
                         .contentType(APPLICATION_JSON)
                         .content("{\"itens\":[]}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void deveConsultarPedidoCriadoPorGet() throws Exception {
+        var criado = mvc.perform(post("/pedidos")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"clienteId":"c-http-get","itens":[{"sku":"CAFE-500","quantidade":2,"precoUnitario":18.90}]}
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        var id = JsonPath.<String>read(criado, "$.id");
+        var antes = totais();
+
+        mvc.perform(get("/pedidos/{id}", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id))
+                .andExpect(jsonPath("$.clienteId").value("c-http-get"))
+                .andExpect(jsonPath("$.status").value("ABERTO"))
+                .andExpect(jsonPath("$.itens[0].sku").value("CAFE-500"))
+                .andExpect(jsonPath("$.itens[0].quantidade").value(2))
+                .andExpect(jsonPath("$.itens[0].precoUnitario").value(18.9))
+                .andExpect(jsonPath("$.total").value(37.8));
+
+        assertThat(totais()).isEqualTo(antes);
+    }
+
+    @Test
+    void consultaDePedidoInexistenteDeveRetornar404() throws Exception {
+        mvc.perform(get("/pedidos/{id}", UUID.randomUUID()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.mensagem").isNotEmpty());
+    }
+
+    @Test
+    void consultaComUuidMalformadoDeveRetornar400() throws Exception {
+        mvc.perform(get("/pedidos/{id}", "abc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensagem").value("Requisição inválida"));
     }
 
     private Totais totais() {
