@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -175,6 +176,11 @@ class RegistrarResultadoPagamentoServiceTest {
         @Override
         public SolicitacaoPagamento marcarPublicada(UUID solicitacaoId) {
             throw new UnsupportedOperationException("Registrar resultado nao publica");
+        }
+
+        @Override
+        public List<SolicitacaoPagamento> listarPendentesDePublicacao() {
+            throw new UnsupportedOperationException("Registrar resultado nao lista pendentes");
         }
 
         @Override

@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -13,6 +14,8 @@ import java.util.UUID;
  * Cada update altera somente as próprias colunas, para que um não desfaça o outro.
  */
 public interface SolicitacaoPagamentoJpaRepository extends JpaRepository<SolicitacaoPagamentoJpaEntity, UUID> {
+
+    List<SolicitacaoPagamentoJpaEntity> findByStatusAndAprovadoIsNull(SolicitacaoPagamento.Status status);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("update SolicitacaoPagamentoJpaEntity s set s.status = :status where s.solicitacaoId = :id")

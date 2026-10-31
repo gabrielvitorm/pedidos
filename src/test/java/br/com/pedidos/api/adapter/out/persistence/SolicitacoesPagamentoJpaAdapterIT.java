@@ -143,6 +143,28 @@ class SolicitacoesPagamentoJpaAdapterIT {
     }
 
     @Test
+    void listaSomentePendentesSemResultado() {
+        var pendente = registrarPendente(CenarioPagamento.APROVAR);
+        var publicada = registrarPendente(CenarioPagamento.APROVAR);
+        adapter.marcarPublicada(publicada.solicitacaoId());
+        var resolvidaSemPublicar = registrarPendente(CenarioPagamento.RECUSAR);
+        var pedidoResolvido = pedidos.buscarPorId(resolvidaSemPublicar.pedidoId()).orElseThrow();
+        adapter.registrarResultado(pedidoResolvido.recusarPagamento(), resolvidaSemPublicar.resolver(false, "Recusado"));
+
+        var ids = adapter.listarPendentesDePublicacao().stream().map(SolicitacaoPagamento::solicitacaoId).toList();
+
+        assertThat(ids).contains(pendente.solicitacaoId());
+        assertThat(ids).doesNotContain(publicada.solicitacaoId(), resolvidaSemPublicar.solicitacaoId());
+    }
+
+    private SolicitacaoPagamento registrarPendente(CenarioPagamento cenario) {
+        var pedido = pedidos.salvar(pedidoComCafe());
+        var solicitacao = pendente(UUID.randomUUID(), pedido, cenario);
+        adapter.registrar(pedido.iniciarPagamento(), solicitacao);
+        return solicitacao;
+    }
+
+    @Test
     void tabelaContemSomenteColunasDaSpec() {
         var colunas = jdbc.queryForList(
                 "SELECT column_name FROM information_schema.columns WHERE table_name = 'solicitacao_pagamento'",

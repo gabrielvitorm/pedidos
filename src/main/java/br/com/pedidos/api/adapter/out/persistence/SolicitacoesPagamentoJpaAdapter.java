@@ -12,6 +12,7 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -68,6 +69,14 @@ public class SolicitacoesPagamentoJpaAdapter implements SolicitacoesPagamento {
             throw new IllegalStateException("Solicitacao inexistente: " + solicitacaoId);
         }
         return repository.findById(solicitacaoId).orElseThrow().toDomain();
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public List<SolicitacaoPagamento> listarPendentesDePublicacao() {
+        return repository.findByStatusAndAprovadoIsNull(SolicitacaoPagamento.Status.PENDENTE_PUBLICACAO).stream()
+                .map(SolicitacaoPagamentoJpaEntity::toDomain)
+                .toList();
     }
 
     @Transactional
