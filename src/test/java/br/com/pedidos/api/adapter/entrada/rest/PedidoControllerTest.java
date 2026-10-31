@@ -21,8 +21,9 @@ class PedidoControllerTest {
     void deveResponderPedidoCriadoComTotalDecimal() throws Exception {
         CriarPedido criarPedido = (cliente, itens) -> Pedido.novo(cliente)
                 .adicionarItem(itens.getFirst());
-        AdicionarItem adicionarItem = (id, sku, quantidade, precoUnitario) ->
-                throw new UnsupportedOperationException();
+        AdicionarItem adicionarItem = (id, sku, quantidade, precoUnitario) -> {
+            throw new UnsupportedOperationException();
+        };
         MockMvc mvc = standaloneSetup(new PedidoController(criarPedido, adicionarItem))
                 .setControllerAdvice(new PedidoExceptionHandler())
                 .build();
