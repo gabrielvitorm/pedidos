@@ -15,5 +15,24 @@ services:
       interval: 5s
       retries: 10
 
+  rabbitmq:
+    image: rabbitmq:4.1-management
+    environment:
+      # Credenciais didáticas, apenas para ambiente local
+      RABBITMQ_DEFAULT_USER: aula
+      RABBITMQ_DEFAULT_PASS: aula-local
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - pedidos-rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
 volumes:
   pedidos-postgres-data:
+  pedidos-rabbitmq-data:
