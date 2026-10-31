@@ -41,12 +41,6 @@ public class SolicitacaoPagamentoJpaEntity {
     @Column(name = "status", nullable = false)
     private SolicitacaoPagamento.Status status;
 
-    @Column(name = "aprovado")
-    private Boolean aprovado;
-
-    @Column(name = "motivo")
-    private String motivo;
-
     protected SolicitacaoPagamentoJpaEntity() {
     }
 
@@ -59,7 +53,11 @@ public class SolicitacaoPagamentoJpaEntity {
         this.status = solicitacao.status();
     }
 
+    void marcarPublicada() {
+        this.status = SolicitacaoPagamento.Status.PUBLICADA;
+    }
+
     SolicitacaoPagamento toDomain() {
-        return new SolicitacaoPagamento(solicitacaoId, pedidoId, valor, cenario, status, aprovado, motivo);
+        return new SolicitacaoPagamento(solicitacaoId, pedidoId, valor, cenario, status);
     }
 }

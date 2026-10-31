@@ -7,7 +7,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
-import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 class SolicitacaoPagamentoTest {
 
@@ -47,28 +46,6 @@ class SolicitacaoPagamentoTest {
         assertThat(solicitacao.mesmoConteudo(PEDIDO, CenarioPagamento.APROVAR)).isTrue();
         assertThat(solicitacao.mesmoConteudo(PEDIDO, CenarioPagamento.RECUSAR)).isFalse();
         assertThat(solicitacao.mesmoConteudo(UUID.randomUUID(), CenarioPagamento.APROVAR)).isFalse();
-    }
-
-    @Test
-    void resolveComResultadoSemAlterarOriginal() {
-        var publicada = SolicitacaoPagamento.pendente(SOLICITACAO, PEDIDO, new BigDecimal("37.80"),
-                CenarioPagamento.APROVAR).publicada();
-
-        var resolvida = publicada.resolver(true, "Aprovado pelo simulador");
-
-        assertThat(publicada.resolvida()).isFalse();
-        assertThat(resolvida.resolvida()).isTrue();
-        assertThat(resolvida.aprovado()).isTrue();
-        assertThat(resolvida.motivo()).isEqualTo("Aprovado pelo simulador");
-        assertThat(resolvida.status()).isEqualTo(SolicitacaoPagamento.Status.PUBLICADA);
-    }
-
-    @Test
-    void naoResolveDuasVezes() {
-        var resolvida = SolicitacaoPagamento.pendente(SOLICITACAO, PEDIDO, new BigDecimal("37.80"),
-                CenarioPagamento.RECUSAR).resolver(false, "Recusado pelo simulador");
-
-        assertThatIllegalStateException().isThrownBy(() -> resolvida.resolver(false, "Recusado pelo simulador"));
     }
 
     @Test

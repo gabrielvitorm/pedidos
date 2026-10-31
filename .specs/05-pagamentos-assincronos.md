@@ -7,10 +7,24 @@ conectado pelo RabbitMQ já presente no Compose local. Não há cobrança real.
 
 Postgres e RabbitMQ não participam de uma transação única. A consistência vem
 de estado persistido antes da publicação, idempotência pela `solicitacaoId`,
-confirmação do broker e republicação de solicitações pendentes.
+confirmação do broker e republicação quando o cliente repete a mesma
+`solicitacaoId`. Não há outbox nem reenvio automático neste laboratório.
 
 Hoje o domínio possui `Pedido.pagar()`, que vai de `ABERTO` direto para `PAGO`.
 Esse caminho síncrono sai da versão assíncrona.
+
+## Mudança de contrato
+
+| Antes | Agora |
+|---|---|
+| O domínio permitia pagar direto: `ABERTO` → `PAGO` em uma chamada, sem processador | `Pedido.pagar()` foi removido; `PAGO` só é alcançado por um resultado de pagamento vindo do broker |
+| Não havia como pedir pagamento por HTTP | `POST /pedidos/{pedidoId}/pagamentos` com `solicitacaoId` e `cenario` |
+| — | O cliente não informa valor nem aprovação; o valor vem de `pedido.total()` e enviar `valor` é `400` |
+| — | `202 Accepted` significa solicitação registrada, confirmada e roteada; **nunca** pagamento aprovado |
+| — | O resultado é acompanhado por `GET /pedidos/{id}`: `EM_PAGAMENTO`, depois `PAGO` ou de volta a `ABERTO` |
+
+Não existia endpoint HTTP de aprovação enviada pelo cliente neste repositório;
+o único atalho síncrono era `Pedido.pagar()` no domínio, removido na etapa 1.
 
 ## Tarefa
 
@@ -120,8 +134,10 @@ então reprocessar a mesma solicitação produz o mesmo resultado.
 
 - `nack`, `basic.return`, timeout ou broker indisponível resultam em `503`.
 - A solicitação permanece `PENDENTE_PUBLICACAO` e o pedido, `EM_PAGAMENTO`.
-- Recuperação: o cliente repete com a mesma `solicitacaoId`, ou a aplicação
-  republica as pendentes ao iniciar.
+- Recuperação: somente quando o cliente repete com a mesma `solicitacaoId` e o
+  mesmo conteúdo. Sem outbox e sem reenvio automático neste laboratório: uma
+  pendente que o cliente não repete continua pendente, com o pedido em
+  `EM_PAGAMENTO`.
 - Publicação duplicada é segura porque o consumo do resultado é idempotente.
 
 ### Consumo do resultado
@@ -137,7 +153,8 @@ então reprocessar a mesma solicitação produz o mesmo resultado.
 
 - Filas duráveis e mensagens persistentes sobrevivem ao reinício do broker.
 - Mensagens sem `ack` voltam para a fila e são reprocessadas de forma idempotente.
-- Solicitações `PENDENTE_PUBLICACAO` são republicadas ao iniciar a aplicação.
+- Solicitações `PENDENTE_PUBLICACAO` sobrevivem ao reinício da aplicação no
+  Postgres e aguardam a repetição do cliente; a aplicação não as reenvia sozinha.
 
 ### Limites
 
@@ -168,13 +185,18 @@ então reprocessar a mesma solicitação produz o mesmo resultado.
 - Aprovação leva a `PAGO`; recusa volta a `ABERTO`.
 - Resultado duplicado não altera o pedido; resultado conflitante e JSON inválido
   vão para a fila de erro.
-- Pendentes são republicadas ao reiniciar a aplicação.
+- Pendente é republicada quando o cliente repete a mesma chave e conteúdo.
 - Testes unitários passam sem banco e sem broker; `*IT` rodam explicitamente
   contra Postgres e RabbitMQ locais pelo Maven Wrapper.
 
 ## Etapas de implementação
 
 Cada etapa tem plano e OK próprios.
+
+A primeira etapa do laboratório, "Pedidos recebe e publica a solicitação",
+corresponde às etapas 0 a 5. O serviço de Pagamentos (etapa 6) é a etapa
+seguinte. A etapa 7 está fora deste laboratório, que não tem reenvio
+automático; ela foi implementada e depois revertida.
 
 | # | Etapa | Verificação |
 |---|---|---|
@@ -185,4 +207,4 @@ Cada etapa tem plano e OK próprios.
 | 4 | Persistência JPA da solicitação | `SolicitacaoPagamentoJpaAdapterIT` |
 | 5 | Topologia AMQP, publicador com confirms e endpoint | `PagamentoPublicacaoIT` |
 | 6 | Simulador e consumidor de resultados | ITs de aprovado, recusado, duplicado, conflitante e inválido |
-| 7 | Republicação de pendentes ao iniciar | IT de reinício do contexto |
+| 7 | ~~Republicação de pendentes ao iniciar~~ (fora do laboratório: sem reenvio automático) | — |

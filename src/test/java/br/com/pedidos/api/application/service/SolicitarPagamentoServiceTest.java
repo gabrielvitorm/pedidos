@@ -227,16 +227,6 @@ class SolicitarPagamentoServiceTest {
             return publicada;
         }
 
-        @Override
-        public void registrarResultado(Pedido pedidoAtualizado, SolicitacaoPagamento solicitacaoResolvida) {
-            throw new UnsupportedOperationException("Solicitar pagamento nao registra resultado");
-        }
-
-        @Override
-        public List<SolicitacaoPagamento> listarPendentesDePublicacao() {
-            throw new UnsupportedOperationException("Solicitar pagamento nao lista pendentes");
-        }
-
         private SolicitacaoPagamento porId(UUID solicitacaoId) {
             return solicitacoes.get(solicitacaoId);
         }

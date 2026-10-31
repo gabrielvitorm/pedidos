@@ -1,7 +1,6 @@
 package br.com.pedidos.api.adapter.out.persistence;
 
 import br.com.pedidos.api.application.exception.PedidoEstadoIncompativelException;
-import br.com.pedidos.api.application.exception.ResultadoPagamentoInvalidoException;
 import br.com.pedidos.api.application.exception.SolicitacaoConflitanteException;
 import br.com.pedidos.api.application.port.out.SolicitacoesPagamento;
 import br.com.pedidos.api.domain.model.Pedido;
@@ -12,7 +11,6 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -65,37 +63,9 @@ public class SolicitacoesPagamentoJpaAdapter implements SolicitacoesPagamento {
     @Transactional
     @Override
     public SolicitacaoPagamento marcarPublicada(UUID solicitacaoId) {
-        if (repository.alterarStatus(solicitacaoId, SolicitacaoPagamento.Status.PUBLICADA) != 1) {
-            throw new IllegalStateException("Solicitacao inexistente: " + solicitacaoId);
-        }
-        return repository.findById(solicitacaoId).orElseThrow().toDomain();
-    }
-
-    @Transactional(readOnly = true)
-    @Override
-    public List<SolicitacaoPagamento> listarPendentesDePublicacao() {
-        return repository.findByStatusAndAprovadoIsNull(SolicitacaoPagamento.Status.PENDENTE_PUBLICACAO).stream()
-                .map(SolicitacaoPagamentoJpaEntity::toDomain)
-                .toList();
-    }
-
-    @Transactional
-    @Override
-    public void registrarResultado(Pedido pedidoAtualizado, SolicitacaoPagamento solicitacaoResolvida) {
-        if (!solicitacaoResolvida.resolvida() || !pedidoAtualizado.id().equals(solicitacaoResolvida.pedidoId())) {
-            throw new IllegalArgumentException("Registro exige a solicitacao resolvida do proprio pedido");
-        }
-        var alterados = pedidos.alterarStatus(
-                pedidoAtualizado.id(), StatusPedido.EM_PAGAMENTO, pedidoAtualizado.status());
-        if (alterados != 1) {
-            throw new ResultadoPagamentoInvalidoException(
-                    "Pedido " + pedidoAtualizado.id() + " nao esta mais em pagamento");
-        }
-        var registrados = repository.registrarResultado(solicitacaoResolvida.solicitacaoId(),
-                solicitacaoResolvida.aprovado(), solicitacaoResolvida.motivo());
-        if (registrados != 1) {
-            throw new ResultadoPagamentoInvalidoException(
-                    "Solicitacao " + solicitacaoResolvida.solicitacaoId() + " ja possui resultado ou nao existe");
-        }
+        var entity = repository.findById(solicitacaoId)
+                .orElseThrow(() -> new IllegalStateException("Solicitacao inexistente: " + solicitacaoId));
+        entity.marcarPublicada();
+        return entity.toDomain();
     }
 }

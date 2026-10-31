@@ -1,7 +1,6 @@
 package br.com.pedidos.api.adapter.out.persistence;
 
 import br.com.pedidos.api.application.exception.PedidoEstadoIncompativelException;
-import br.com.pedidos.api.application.exception.ResultadoPagamentoInvalidoException;
 import br.com.pedidos.api.application.exception.SolicitacaoConflitanteException;
 import br.com.pedidos.api.domain.model.CenarioPagamento;
 import br.com.pedidos.api.domain.model.ItemPedido;
@@ -92,86 +91,13 @@ class SolicitacoesPagamentoJpaAdapterIT {
     }
 
     @Test
-    void resultadoGravadoAntesDaPublicacaoNaoEhDesfeitoAoMarcarPublicada() {
-        var pedido = pedidos.salvar(pedidoComCafe());
-        var solicitacao = pendente(UUID.randomUUID(), pedido, CenarioPagamento.APROVAR);
-        var emPagamento = pedido.iniciarPagamento();
-        adapter.registrar(emPagamento, solicitacao);
-
-        adapter.registrarResultado(emPagamento.aprovarPagamento(), solicitacao.resolver(true, "Aprovado"));
-        adapter.marcarPublicada(solicitacao.solicitacaoId());
-
-        var gravada = adapter.buscarPorId(solicitacao.solicitacaoId()).orElseThrow();
-        assertThat(gravada.status()).isEqualTo(SolicitacaoPagamento.Status.PUBLICADA);
-        assertThat(gravada.aprovado()).isTrue();
-        assertThat(gravada.motivo()).isEqualTo("Aprovado");
-        assertThat(pedidos.buscarPorId(pedido.id()).orElseThrow().status()).isEqualTo(StatusPedido.PAGO);
-    }
-
-    @Test
-    void publicacaoMarcadaAntesDoResultadoNaoEhDesfeitaAoGravarResultado() {
-        var pedido = pedidos.salvar(pedidoComCafe());
-        var solicitacao = pendente(UUID.randomUUID(), pedido, CenarioPagamento.RECUSAR);
-        var emPagamento = pedido.iniciarPagamento();
-        adapter.registrar(emPagamento, solicitacao);
-
-        adapter.marcarPublicada(solicitacao.solicitacaoId());
-        adapter.registrarResultado(emPagamento.recusarPagamento(), solicitacao.resolver(false, "Recusado"));
-
-        var gravada = adapter.buscarPorId(solicitacao.solicitacaoId()).orElseThrow();
-        assertThat(gravada.status()).isEqualTo(SolicitacaoPagamento.Status.PUBLICADA);
-        assertThat(gravada.aprovado()).isFalse();
-        assertThat(pedidos.buscarPorId(pedido.id()).orElseThrow().status()).isEqualTo(StatusPedido.ABERTO);
-    }
-
-    @Test
-    void segundoResultadoEhRecusadoEDesfazStatusDoPedido() {
-        var pedido = pedidos.salvar(pedidoComCafe());
-        var solicitacao = pendente(UUID.randomUUID(), pedido, CenarioPagamento.APROVAR);
-        var emPagamento = pedido.iniciarPagamento();
-        adapter.registrar(emPagamento, solicitacao);
-        adapter.registrarResultado(emPagamento.recusarPagamento(), solicitacao.resolver(false, "Recusado"));
-        var novaTentativa = pedidos.buscarPorId(pedido.id()).orElseThrow().iniciarPagamento();
-        jdbc.update("UPDATE pedido SET status = 'EM_PAGAMENTO' WHERE id = ?", pedido.id());
-
-        assertThatThrownBy(() -> adapter.registrarResultado(novaTentativa.aprovarPagamento(),
-                solicitacao.resolver(true, "Aprovado")))
-                .isInstanceOf(ResultadoPagamentoInvalidoException.class);
-
-        assertThat(pedidos.buscarPorId(pedido.id()).orElseThrow().status()).isEqualTo(StatusPedido.EM_PAGAMENTO);
-        assertThat(adapter.buscarPorId(solicitacao.solicitacaoId()).orElseThrow().aprovado()).isFalse();
-    }
-
-    @Test
-    void listaSomentePendentesSemResultado() {
-        var pendente = registrarPendente(CenarioPagamento.APROVAR);
-        var publicada = registrarPendente(CenarioPagamento.APROVAR);
-        adapter.marcarPublicada(publicada.solicitacaoId());
-        var resolvidaSemPublicar = registrarPendente(CenarioPagamento.RECUSAR);
-        var pedidoResolvido = pedidos.buscarPorId(resolvidaSemPublicar.pedidoId()).orElseThrow();
-        adapter.registrarResultado(pedidoResolvido.recusarPagamento(), resolvidaSemPublicar.resolver(false, "Recusado"));
-
-        var ids = adapter.listarPendentesDePublicacao().stream().map(SolicitacaoPagamento::solicitacaoId).toList();
-
-        assertThat(ids).contains(pendente.solicitacaoId());
-        assertThat(ids).doesNotContain(publicada.solicitacaoId(), resolvidaSemPublicar.solicitacaoId());
-    }
-
-    private SolicitacaoPagamento registrarPendente(CenarioPagamento cenario) {
-        var pedido = pedidos.salvar(pedidoComCafe());
-        var solicitacao = pendente(UUID.randomUUID(), pedido, cenario);
-        adapter.registrar(pedido.iniciarPagamento(), solicitacao);
-        return solicitacao;
-    }
-
-    @Test
     void tabelaContemSomenteColunasDaSpec() {
         var colunas = jdbc.queryForList(
                 "SELECT column_name FROM information_schema.columns WHERE table_name = 'solicitacao_pagamento'",
                 String.class);
 
         assertThat(colunas).containsExactlyInAnyOrder(
-                "solicitacao_id", "pedido_id", "valor", "cenario", "status", "aprovado", "motivo");
+                "solicitacao_id", "pedido_id", "valor", "cenario", "status");
     }
 
     private int linhasDaSolicitacao(UUID solicitacaoId) {

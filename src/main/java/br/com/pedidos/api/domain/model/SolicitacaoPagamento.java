@@ -8,9 +8,7 @@ public record SolicitacaoPagamento(
         UUID pedidoId,
         BigDecimal valor,
         CenarioPagamento cenario,
-        Status status,
-        Boolean aprovado,
-        String motivo
+        Status status
 ) {
 
     public enum Status {
@@ -34,35 +32,19 @@ public record SolicitacaoPagamento(
         if (status == null) {
             throw new IllegalArgumentException("Solicitacao deve possuir status");
         }
-        if (aprovado == null && motivo != null) {
-            throw new IllegalArgumentException("Motivo exige resultado");
-        }
     }
 
     public static SolicitacaoPagamento pendente(UUID solicitacaoId, UUID pedidoId, BigDecimal valor,
                                                 CenarioPagamento cenario) {
-        return new SolicitacaoPagamento(solicitacaoId, pedidoId, valor, cenario, Status.PENDENTE_PUBLICACAO,
-                null, null);
+        return new SolicitacaoPagamento(solicitacaoId, pedidoId, valor, cenario, Status.PENDENTE_PUBLICACAO);
     }
 
     public SolicitacaoPagamento publicada() {
-        return new SolicitacaoPagamento(solicitacaoId, pedidoId, valor, cenario, Status.PUBLICADA, aprovado, motivo);
-    }
-
-    public SolicitacaoPagamento resolver(boolean resultadoAprovado, String motivoResultado) {
-        if (resolvida()) {
-            throw new IllegalStateException("Solicitacao ja possui resultado");
-        }
-        return new SolicitacaoPagamento(solicitacaoId, pedidoId, valor, cenario, status,
-                resultadoAprovado, motivoResultado);
+        return new SolicitacaoPagamento(solicitacaoId, pedidoId, valor, cenario, Status.PUBLICADA);
     }
 
     public boolean pendenteDePublicacao() {
         return status == Status.PENDENTE_PUBLICACAO;
-    }
-
-    public boolean resolvida() {
-        return aprovado != null;
     }
 
     public boolean mesmoConteudo(UUID outroPedidoId, CenarioPagamento outroCenario) {
