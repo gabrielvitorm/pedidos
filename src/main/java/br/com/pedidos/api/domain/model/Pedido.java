@@ -40,9 +40,19 @@ public record Pedido(UUID id, String cliente, StatusPedido status, List<ItemPedi
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    public Pedido pagar() {
+    public Pedido iniciarPagamento() {
         exigirAberto();
+        return new Pedido(id, cliente, StatusPedido.EM_PAGAMENTO, itens);
+    }
+
+    public Pedido aprovarPagamento() {
+        exigirEmPagamento();
         return new Pedido(id, cliente, StatusPedido.PAGO, itens);
+    }
+
+    public Pedido recusarPagamento() {
+        exigirEmPagamento();
+        return new Pedido(id, cliente, StatusPedido.ABERTO, itens);
     }
 
     public Pedido cancelar() {
@@ -53,6 +63,12 @@ public record Pedido(UUID id, String cliente, StatusPedido status, List<ItemPedi
     private void exigirAberto() {
         if (status != StatusPedido.ABERTO) {
             throw new IllegalStateException("Pedido deve estar aberto");
+        }
+    }
+
+    private void exigirEmPagamento() {
+        if (status != StatusPedido.EM_PAGAMENTO) {
+            throw new IllegalStateException("Pedido deve estar em pagamento");
         }
     }
 }

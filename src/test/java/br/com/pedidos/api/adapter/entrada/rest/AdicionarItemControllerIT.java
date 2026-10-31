@@ -62,7 +62,7 @@ class AdicionarItemControllerIT {
 
     @Test
     void pedidoPagoRetorna409SemGravar() throws Exception {
-        var pedido = pedidos.salvar(salvarPedidoAberto().pagar());
+        var pedido = pedidos.salvar(salvarPedidoAberto().iniciarPagamento().aprovarPagamento());
         var antes = totalDeItens(pedido.id());
 
         mvc.perform(post("/pedidos/{id}/itens", pedido.id())

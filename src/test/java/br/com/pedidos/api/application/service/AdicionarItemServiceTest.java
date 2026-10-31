@@ -43,7 +43,18 @@ class AdicionarItemServiceTest {
 
     @Test
     void pedidoFechadoNaoSalva() {
-        var existente = pedidoComCafe().pagar();
+        var existente = pedidoComCafe().iniciarPagamento().aprovarPagamento();
+        var pedidos = new PedidosEmMemoria(existente);
+        var service = new AdicionarItemService(pedidos);
+
+        assertThatThrownBy(() -> service.adicionar(existente.id(), "CAFE-500", 1, new BigDecimal("18.90")))
+                .isInstanceOf(PedidoFechadoException.class);
+        assertThat(pedidos.salvamentos).isZero();
+    }
+
+    @Test
+    void pedidoEmPagamentoNaoSalva() {
+        var existente = pedidoComCafe().iniciarPagamento();
         var pedidos = new PedidosEmMemoria(existente);
         var service = new AdicionarItemService(pedidos);
 
