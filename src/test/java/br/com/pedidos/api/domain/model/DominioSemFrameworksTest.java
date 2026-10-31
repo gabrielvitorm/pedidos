@@ -13,7 +13,7 @@ class DominioSemFrameworksTest {
 
     @Test
     void modelosDoDominioSaoRecordsSemSettersOuAnotacoesDeFramework() {
-        var modelos = Stream.of(Pedido.class, ItemPedido.class);
+        var modelos = Stream.of(Pedido.class, ItemPedido.class, SolicitacaoPagamento.class);
 
         modelos.forEach(modelo -> {
             assertThat(modelo.isRecord()).isTrue();
